@@ -13,7 +13,7 @@ import uuid
 from django.db.models import F
 
 from apps.core.audit import audit
-from apps.core.context import get_request_id
+from apps.core.context import bind_order, get_request_id
 
 from .models import Payment, Refund
 from .providers.registry import get_provider
@@ -61,3 +61,64 @@ def submit_refund(refund_id: int) -> None:
     Refund.objects.filter(pk=refund.pk, provider_refund_id__isnull=True).update(
         provider_refund_id=result.id
     )
+
+
+class RefundRejected(Exception):
+    def __init__(self, code: str, message: str, status_code: int = 409):
+        self.code, self.status_code = code, status_code
+        super().__init__(message)
+
+
+def refund_tickets(order_id: int, ticket_ids: list[int], actor) -> Refund | None:
+    """Organizer refund of specific tickets. Runs in the caller's transaction.
+
+    Lock order: Order -> Payment -> Ticket -> TicketType (release).
+    Returns None when the selected tickets were free (nothing to send to the provider).
+    """
+    from apps.orders.inventory import release
+    from apps.orders.models import ORDER_MACHINE, Order, OrderStatus, Ticket, TicketStatus
+
+    from .models import PaymentStatus
+
+    order = Order.objects.select_for_update().get(pk=order_id)
+    bind_order(order.pk)
+    if order.status not in (OrderStatus.PAID, OrderStatus.PARTIALLY_REFUNDED):
+        raise RefundRejected("invalid_state", f"Order is {order.status}.")
+    payment = Payment.objects.select_for_update().get(order=order, status=PaymentStatus.SUCCEEDED)
+
+    wanted = sorted(set(ticket_ids))
+    tickets = list(
+        Ticket.objects.select_for_update()
+        .filter(pk__in=wanted, order_item__order=order)
+        .select_related("order_item")
+        .order_by("id")
+    )
+    if len(tickets) != len(wanted) or not wanted:
+        raise RefundRejected("unknown_ticket", "Tickets must belong to this order.", 400)
+    for t in tickets:
+        if t.status == TicketStatus.CHECKED_IN:
+            raise RefundRejected("ticket_checked_in", f"Ticket {t.pk} was already used.")
+        if t.status == TicketStatus.REFUNDED:
+            raise RefundRejected("already_refunded", f"Ticket {t.pk} was already refunded.")
+
+    amount = sum(t.order_item.unit_price_cents for t in tickets)
+    if payment.refunded_cents + amount > payment.amount_cents:  # CHECK constraint backs this
+        raise RefundRejected("over_refund", "Refund would exceed the amount paid.")
+
+    Ticket.objects.filter(pk__in=[t.pk for t in tickets]).update(status=TicketStatus.REFUNDED)
+    counts: dict[int, int] = {}
+    for t in tickets:
+        counts[t.ticket_type_id] = counts.get(t.ticket_type_id, 0) + 1
+    release(counts)  # seats go back on sale
+
+    refund = None
+    if amount:
+        refund = create_refund_record(
+            payment, amount, reason="requested_by_organizer", actor=actor, tickets=tickets
+        )
+    still_live = Ticket.objects.filter(order_item__order=order).exclude(
+        status=TicketStatus.REFUNDED
+    )
+    target = OrderStatus.PARTIALLY_REFUNDED if still_live.exists() else OrderStatus.REFUNDED
+    ORDER_MACHINE.apply(order, target, actor=actor, ticket_ids=wanted, amount_cents=amount)
+    return refund

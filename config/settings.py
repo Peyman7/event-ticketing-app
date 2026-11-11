@@ -94,6 +94,12 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Ticketing API",
     "DESCRIPTION": "Demo ticketing backend: holds, idempotent checkout, payments, check-in.",
     "VERSION": "0.1.0",
+    "ENUM_NAME_OVERRIDES": {
+        "OrderStatusEnum": "apps.orders.models.OrderStatus",
+        "TicketStatusEnum": "apps.orders.models.TicketStatus",
+        "PaymentStatusEnum": "apps.payments.models.PaymentStatus",
+        "RefundStatusEnum": "apps.payments.models.RefundStatus",
+    },
 }
 
 # --- Domain settings ---------------------------------------------------------

@@ -26,17 +26,21 @@ class Boom(Exception):
 @pytest.mark.django_db(transaction=True)
 def test_expiry_job_commits_and_rolls_back_with_the_hold():
     """The transactional-outbox property: job row and hold share one transaction."""
+    # Procrastinate's tables are unmanaged, so transactional tests don't flush them:
+    # compare against a baseline instead of absolute counts.
+    jobs = ProcrastinateJob.objects.filter(task_name="orders.expire_order")
+    baseline = jobs.count()
     tt = TicketTypeFactory(capacity=10)
     with pytest.raises(Boom), transaction.atomic():
         services.place_order(UserFactory(), [L(tt.id, 1)])
-        assert ProcrastinateJob.objects.count() == 1  # visible inside the txn...
+        assert jobs.count() == baseline + 1  # visible inside the txn...
         raise Boom
-    assert ProcrastinateJob.objects.count() == 0  # ...gone with the rollback
+    assert jobs.count() == baseline  # ...gone with the rollback
     tt.refresh_from_db()
     assert tt.reserved_count == 0
 
     order = _place(tt)
-    job = ProcrastinateJob.objects.get()
+    job = jobs.get(args__order_id=order.pk)
     assert job.task_name == "orders.expire_order"
     assert job.args["order_id"] == order.pk
     assert job.scheduled_at == order.expires_at

@@ -21,6 +21,7 @@ services:
     env_file: .env
     volumes: [".:/app"]
     ports: ["8000:8000"]
+    command: ["gunicorn", "config.wsgi:application", "-c", "gunicorn.conf.py"]
     depends_on:
       db: {condition: service_healthy}
 

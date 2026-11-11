@@ -20,3 +20,13 @@ def test_request_id_is_echoed_or_generated(client):
 def test_openapi_schema_renders(client):
     resp = client.get("/api/schema/")
     assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_openapi_schema_has_no_warnings():
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    err = StringIO()
+    call_command("spectacular", "--validate", "--fail-on-warn", stdout=StringIO(), stderr=err)

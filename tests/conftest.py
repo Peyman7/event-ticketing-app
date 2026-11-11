@@ -18,3 +18,17 @@ def order_factory():
     from tests.factories import OrderFactory
 
     return OrderFactory
+
+
+@pytest.fixture
+def client_for():
+    """client_for(user) -> APIClient authenticated with that user's token."""
+    from rest_framework.authtoken.models import Token
+
+    def make(user):
+        c = APIClient()
+        token, _ = Token.objects.get_or_create(user=user)
+        c.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        return c
+
+    return make

@@ -1,0 +1,11 @@
+# Runtime dependencies (direct deps pinned; resolved on python:3.12-slim)
+Django==5.2.19
+djangorestframework==3.18.3
+drf-spectacular==0.30.0
+procrastinate[django]==3.10.0
+psycopg[binary]==3.3.8
+django-environ==0.14.0
+python-json-logger==4.2.0
+prometheus-client==0.26.0
+sentry-sdk==2.74.0
+gunicorn==27.0.0

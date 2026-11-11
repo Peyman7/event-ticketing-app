@@ -94,7 +94,7 @@ def process(webhook_event_id: int) -> str:
             return f"already_{ev.status}"
         obj = ev.payload["data"]["object"]
         if ev.type in PAYMENT_EVENT_STATUS:
-            status, result = _handle_payment_event(ev.type, obj)
+            status, result = apply_payment_update(ev.type, obj, source="webhook")
         elif ev.type == "refund.succeeded":
             status, result = _handle_refund_succeeded(obj)
         else:
@@ -116,7 +116,10 @@ def _find_payment_id(obj: dict) -> int | None:
     )
 
 
-def _handle_payment_event(event_type: str, obj: dict) -> tuple[str, str]:
+def apply_payment_update(event_type: str, obj: dict, source: str) -> tuple[str, str]:
+    """Apply a provider-reported payment state. Shared by webhooks and reconciliation
+    (apps/payments/reconcile.py), so both go through the same locks and state machine.
+    Must run inside a transaction."""
     payment_id = _find_payment_id(obj)
     order_id = Payment.objects.filter(pk=payment_id).values_list("order_id", flat=True).first()
     if order_id is None:
@@ -150,13 +153,13 @@ def _handle_payment_event(event_type: str, obj: dict) -> tuple[str, str]:
 
     if target == PaymentStatus.FAILED:
         payment.failure_reason = obj.get("failure_code", "failed")
-    PAYMENT_MACHINE.apply(payment, target, extra_fields=["failure_reason"], source="webhook")
+    PAYMENT_MACHINE.apply(payment, target, extra_fields=["failure_reason"], source=source)
     PAYMENT_OUTCOMES.labels(status=target).inc()
 
     if target != PaymentStatus.SUCCEEDED:
         return WebhookStatus.PROCESSED, f"payment_{target}"
     if order.status == OrderStatus.PENDING:
-        _confirm_order(order)
+        _confirm_order(order, source)
         return WebhookStatus.PROCESSED, "order_paid"
     # Money arrived for an order that already expired/cancelled: its seats may have been
     # resold, so never over-commit inventory. Give the money back.
@@ -164,11 +167,11 @@ def _handle_payment_event(event_type: str, obj: dict) -> tuple[str, str]:
     return WebhookStatus.PROCESSED, f"late_payment_refunded:{order.status}"
 
 
-def _confirm_order(order: Order) -> None:
+def _confirm_order(order: Order, source: str) -> None:
     from apps.orders.tasks import send_order_confirmation_task
 
     order.paid_at = timezone.now()
-    ORDER_MACHINE.apply(order, OrderStatus.PAID, extra_fields=["paid_at"], source="webhook")
+    ORDER_MACHINE.apply(order, OrderStatus.PAID, extra_fields=["paid_at"], source=source)
     issue_tickets(order)
     send_order_confirmation_task.defer(order_id=order.pk, request_id=get_request_id())
 

@@ -18,3 +18,11 @@ def expire_order_task(order_id: int, request_id: str | None = None) -> bool:
 def sweep_expired_holds_task(timestamp: int) -> int:
     with correlation():
         return services.sweep_expired_holds()
+
+
+@app.task(name="orders.send_order_confirmation", queue="emails")
+def send_order_confirmation_task(order_id: int, request_id: str | None = None) -> None:
+    from .notifications import send_order_confirmation
+
+    with correlation(request_id, order_id):
+        send_order_confirmation(order_id)

@@ -8,7 +8,7 @@ from procrastinate.contrib.django import app
 
 from apps.core.context import correlation
 
-from . import services, signing
+from . import refunds, services, signing, webhooks
 from .providers.fake import FakeProvider
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,18 @@ def submit_payment_task(payment_id: int, request_id: str | None = None) -> None:
 def cancel_stale_payment_task(payment_id: int, request_id: str | None = None) -> None:
     with correlation(request_id):
         services.cancel_stale_payment(payment_id)
+
+
+@app.task(name="payments.process_webhook_event", queue="webhooks", retry=RETRY)
+def process_webhook_event_task(webhook_event_id: int, request_id: str | None = None) -> str:
+    with correlation(request_id):
+        return webhooks.process(webhook_event_id)
+
+
+@app.task(name="payments.submit_refund", queue="payments", retry=RETRY)
+def submit_refund_task(refund_id: int, request_id: str | None = None) -> None:
+    with correlation(request_id):
+        refunds.submit_refund(refund_id)
 
 
 # --- Fake provider internals (would live on the provider's side) ---------------------

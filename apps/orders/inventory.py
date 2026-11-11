@@ -6,7 +6,7 @@ and         0 <= reserved_count <= capacity   (also a DB CHECK constraint)
 Concurrency strategy: pessimistic row locks (SELECT ... FOR UPDATE) on the TicketType
 rows, always taken in ascending id order so two multi-type carts cannot deadlock.
 Lock hierarchy across the codebase: Order -> Payment -> Ticket -> TicketType
-(see docs/design.md for the deadlock this ordering avoids).
+(see README "Lock ordering" for the deadlock this ordering avoids).
 """
 
 from __future__ import annotations

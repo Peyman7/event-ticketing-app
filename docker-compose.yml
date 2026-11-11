@@ -22,6 +22,8 @@ services:
     env_file: .env
     volumes: [".:/app"]
     ports: ["8000:8000"]
+    environment:
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
     command: ["gunicorn", "config.wsgi:application", "-c", "gunicorn.conf.py"]
     depends_on:
       db: {condition: service_healthy}
@@ -30,7 +32,7 @@ services:
     image: ticketing-app:dev
     env_file: .env
     volumes: [".:/app"]
-    command: ["python", "manage.py", "procrastinate", "worker"]
+    command: ["python", "manage.py", "procrastinate", "worker", "--concurrency", "${WORKER_CONCURRENCY:-8}"]
     depends_on:
       db: {condition: service_healthy}
 

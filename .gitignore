@@ -8,3 +8,4 @@ __pycache__/
 staticfiles/
 loadtest/results/*.csv
 loadtest/results/*.html
+loadtest/setup.json

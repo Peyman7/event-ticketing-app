@@ -48,6 +48,6 @@ check-inventory:  ## Verify reserved_count matches held+sold rows
 	$(RUN) python manage.py check_inventory
 
 loadtest:  ## Headless on-sale spike (see docs/load-test.md)
-	$(COMPOSE) --profile loadtest run --rm locust -f locustfile.py --headless \
+	$(COMPOSE) --profile loadtest run --rm --no-deps locust -f locustfile.py --headless --processes 4 \
 	  --host http://web:8000 -u $${USERS:-300} -r $${SPAWN:-50} -t $${DURATION:-60s} \
 	  --csv results/onsale --html results/onsale.html

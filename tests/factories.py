@@ -47,3 +47,14 @@ class TicketTypeFactory(factory.django.DjangoModelFactory):
     sale_starts_at = factory.LazyFunction(lambda: timezone.now() - timedelta(days=1))
     sale_ends_at = factory.LazyFunction(lambda: timezone.now() + timedelta(days=10))
     max_per_order = 10
+
+
+class OrderFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = "orders.Order"
+
+    buyer = factory.SubFactory(UserFactory)
+    event = factory.SubFactory(EventFactory)
+    total_cents = 0
+    currency = "USD"
+    expires_at = factory.LazyFunction(lambda: timezone.now() + timedelta(minutes=10))

@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "procrastinate.contrib.django",
     "apps.core",
     "apps.catalog",
+    "apps.orders",
 ]
 
 MIDDLEWARE = [

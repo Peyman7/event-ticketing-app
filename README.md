@@ -302,29 +302,6 @@ once; concurrent refunds of different tickets sum exactly to the amount paid.
   buyer traffic on the same workers. Webhooks should have their own pool.
 - **Reporting** off the primary: pre-aggregated counters or a warehouse fed by CDC.
 
-## Limitations (honest list)
-
-- **The fake provider runs in-process,** sharing our database for its own ledger, and
-  its jobs run on our worker. A real integration needs network timeouts, a circuit
-  breaker and provider-side idempotency semantics.
-- **Free (0-cent) orders are rejected at `/pay`.** There's no "confirm without payment"
-  path.
-- **Partial refunds are per ticket only.** There's no arbitrary-amount goodwill
-  refund. A refund whose provider call ultimately fails stays `pending`; there's no
-  retry or alert flow beyond job retries.
-- **Submit-job crash window:** if the worker crashes after the provider created the
-  charge but before we stored its id, reconciliation can't find it. A real provider
-  can be searched by metadata; here, grace expiry marks it failed locally.
-- **No per-buyer limit across orders,** only per order, so a bot could place several
-  orders. A waiting room or account-level limits would address that.
-- **Metrics from the worker process aren't exported** (no scrape endpoint for it).
-- **Load-test numbers come from a memory-starved laptop.** Server-side latencies are
-  fine (checkout p50 70 ms), but the rig couldn't generate meaningful throughput
-  figures. See [docs/load-test.md](docs/load-test.md).
-- **Auth:** DRF tokens with no expiry or rotation, and no staff/door-scanner role
-  separate from the organizer account.
-- **Locally, `make` must be installed;** each target is a thin `docker compose`
-  wrapper if not.
 
 ## Tests
 

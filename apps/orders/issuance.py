@@ -17,6 +17,7 @@ def issue_tickets(order: Order) -> list[Ticket]:
             order_item=item,
             ticket_type_id=item.ticket_type_id,
             event_id=order.event_id,
+            price_cents=item.unit_price_cents,
             code=new_ticket_code(),
         )
         for item in order.items.all()

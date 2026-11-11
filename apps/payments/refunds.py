@@ -90,7 +90,6 @@ def refund_tickets(order_id: int, ticket_ids: list[int], actor) -> Refund | None
     tickets = list(
         Ticket.objects.select_for_update()
         .filter(pk__in=wanted, order_item__order=order)
-        .select_related("order_item")
         .order_by("id")
     )
     if len(tickets) != len(wanted) or not wanted:
@@ -101,7 +100,7 @@ def refund_tickets(order_id: int, ticket_ids: list[int], actor) -> Refund | None
         if t.status == TicketStatus.REFUNDED:
             raise RefundRejected("already_refunded", f"Ticket {t.pk} was already refunded.")
 
-    amount = sum(t.order_item.unit_price_cents for t in tickets)
+    amount = sum(t.price_cents for t in tickets)
     if payment.refunded_cents + amount > payment.amount_cents:  # CHECK constraint backs this
         raise RefundRejected("over_refund", "Refund would exceed the amount paid.")
 

@@ -64,6 +64,7 @@ def start_payment(order_id: int, buyer, payment_method: str) -> Payment:
 
     payment = Payment.objects.create(
         order=order,
+        event_id=order.event_id,
         provider=get_provider().name,
         provider_idempotency_key=f"pay_{uuid.uuid4().hex}",
         payment_method=payment_method,

@@ -23,6 +23,9 @@ PAYMENT_MACHINE = StateMachine(
 
 class Payment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payments")
+    # Denormalised from order.event (immutable) so per-event cash totals don't scan every
+    # organizer's payments (docs/explain-analyze.md, query 8).
+    event = models.ForeignKey("catalog.Event", on_delete=models.PROTECT, related_name="payments")
     provider = models.CharField(max_length=30)
     # Sent to the provider so a retried submission can never create a second charge.
     provider_idempotency_key = models.CharField(max_length=64, unique=True)
@@ -37,7 +40,16 @@ class Payment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [models.Index(fields=["status", "created_at"])]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            # Per-event cash totals: index-only scan over succeeded payments of one event.
+            models.Index(
+                fields=["event"],
+                include=["amount_cents", "refunded_cents"],
+                condition=Q(status="succeeded"),
+                name="payment_succeeded_by_event_idx",
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=Q(status__in=PaymentStatus.values), name="payment_status_valid"

@@ -51,6 +51,12 @@ class Order(models.Model):
                 condition=Q(status="pending"),
                 name="order_pending_expiry_idx",
             ),
+            # The sales timeline reads only paid orders of one event.
+            models.Index(
+                fields=["event", "paid_at"],
+                condition=Q(paid_at__isnull=False),
+                name="order_paid_by_event_idx",
+            ),
         ]
         constraints = [
             models.CheckConstraint(
@@ -101,10 +107,17 @@ class TicketStatus(models.TextChoices):
 
 class Ticket(models.Model):
     order_item = models.ForeignKey(OrderItem, on_delete=models.PROTECT, related_name="tickets")
-    ticket_type = models.ForeignKey(TicketType, on_delete=models.PROTECT, related_name="tickets")
+    # No standalone FK index: ticket_type_status_cov_idx leads with ticket_type and serves
+    # the same lookups, so a second index would only add write cost at on-sale time.
+    ticket_type = models.ForeignKey(
+        TicketType, on_delete=models.PROTECT, related_name="tickets", db_index=False
+    )
     # Denormalised so check-in can scope a scan to an event without joins.
     event = models.ForeignKey(Event, on_delete=models.PROTECT, related_name="tickets")
     code = models.CharField(max_length=32, unique=True)
+    # Immutable snapshot of what was paid for this seat (= its OrderItem's unit price).
+    # Denormalised so reporting and refunds aggregate tickets without joining order items.
+    price_cents = models.BigIntegerField()
     status = models.CharField(
         max_length=20, choices=TicketStatus.choices, default=TicketStatus.VALID
     )
@@ -112,11 +125,20 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [models.Index(fields=["ticket_type", "status"])]
+        indexes = [
+            # Covering index: the per-type sales report is an index-only scan.
+            models.Index(
+                fields=["ticket_type", "status"],
+                # id too: Django compiles Count("tickets") to COUNT(orders_ticket.id).
+                include=["price_cents", "id"],
+                name="ticket_type_status_cov_idx",
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=Q(status__in=TicketStatus.values), name="ticket_status_valid"
             ),
+            models.CheckConstraint(condition=Q(price_cents__gte=0), name="ticket_price_gte_0"),
             models.CheckConstraint(
                 condition=(Q(status="checked_in") & Q(checked_in_at__isnull=False))
                 | (~Q(status="checked_in") & Q(checked_in_at__isnull=True)),

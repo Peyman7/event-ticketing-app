@@ -5,8 +5,9 @@ services:
       POSTGRES_USER: ticketing
       POSTGRES_PASSWORD: ticketing
       POSTGRES_DB: ticketing
-    # Default max_connections (100) is enough for the 50-thread race tests.
-    command: ["postgres", "-c", "max_connections=200"]
+    # random_page_cost=1.1: SSD-appropriate planner cost (default 4 assumes spinning
+    # disks and under-uses indexes; see docs/explain-analyze.md).
+    command: ["postgres", "-c", "max_connections=200", "-c", "random_page_cost=1.1"]
     ports: ["${DB_HOST_PORT:-5433}:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:

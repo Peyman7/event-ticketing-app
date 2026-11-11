@@ -103,6 +103,7 @@ def test_provider_outage_raises_for_job_retry(order):
 def test_db_forbids_two_successful_payments_for_one_order(order):
     Payment.objects.create(
         order=order,
+        event=order.event,
         provider="fake",
         provider_idempotency_key="a",
         payment_method="pm_ok",
@@ -113,6 +114,7 @@ def test_db_forbids_two_successful_payments_for_one_order(order):
     with pytest.raises(IntegrityError), transaction.atomic():
         Payment.objects.create(
             order=order,
+            event=order.event,
             provider="fake",
             provider_idempotency_key="b",
             payment_method="pm_ok",
@@ -125,6 +127,7 @@ def test_db_forbids_two_successful_payments_for_one_order(order):
 def test_db_forbids_refunding_more_than_paid(order):
     p = Payment.objects.create(
         order=order,
+        event=order.event,
         provider="fake",
         provider_idempotency_key="a",
         payment_method="pm_ok",

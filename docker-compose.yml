@@ -17,6 +17,7 @@ services:
 
   web:
     build: .
+    image: ticketing-app:dev
     env_file: .env
     volumes: [".:/app"]
     ports: ["8000:8000"]
@@ -24,7 +25,7 @@ services:
       db: {condition: service_healthy}
 
   worker:
-    build: .
+    image: ticketing-app:dev
     env_file: .env
     volumes: [".:/app"]
     command: ["python", "manage.py", "procrastinate", "worker"]

@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "procrastinate.contrib.django",
     "apps.core",
+    "apps.catalog",
 ]
 
 MIDDLEWARE = [

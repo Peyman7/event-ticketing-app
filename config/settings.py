@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.catalog",
     "apps.orders",
+    "apps.payments",
 ]
 
 MIDDLEWARE = [
@@ -99,6 +100,9 @@ SPECTACULAR_SETTINGS = {
 HOLD_MINUTES = env.int("HOLD_MINUTES", default=10)
 PAYMENT_GRACE_MINUTES = env.int("PAYMENT_GRACE_MINUTES", default=15)
 IDEMPOTENCY_KEY_TTL_HOURS = env.int("IDEMPOTENCY_KEY_TTL_HOURS", default=24)
+PAYMENT_PROVIDER_CLASS = env(
+    "PAYMENT_PROVIDER_CLASS", default="apps.payments.providers.fake.FakeProvider"
+)
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET")
 PAYMENT_WEBHOOK_TOLERANCE_SECONDS = env.int("PAYMENT_WEBHOOK_TOLERANCE_SECONDS", default=300)
 FAKE_PROVIDER_WEBHOOK_URL = env(

@@ -41,6 +41,10 @@ def cancel_order(order_id: int, actor) -> Order:
         order = Order.objects.select_for_update().get(pk=order_id)
         bind_order(order.pk)
         ORDER_MACHINE.check(order.status, OrderStatus.CANCELLED)
+        from apps.payments.services import PaymentRejected, in_flight_payment
+
+        if in_flight_payment(order):
+            raise PaymentRejected("payment_in_flight", "A payment is processing; cannot cancel.")
         release_order_hold(order)
         ORDER_MACHINE.apply(order, OrderStatus.CANCELLED, actor=actor, reason="buyer_cancelled")
         return order
@@ -62,8 +66,19 @@ def expire_order(order_id: int, *, now: datetime | None = None, skip_locked: boo
         if order is None or order.expires_at > now:
             return False
         bind_order(order.pk)
+        # orders -> payments is a deliberate, local dependency: expiry must know whether a
+        # charge is in flight (payment grace period).
+        from apps.payments import services as payments
+        from apps.payments.tasks import cancel_stale_payment_task
+
+        allowed, in_flight = payments.may_expire(order, now)
+        if not allowed:
+            logger.info("expiry deferred: payment in flight")
+            return False
         release_order_hold(order)
         ORDER_MACHINE.apply(order, OrderStatus.EXPIRED, reason="hold_expired")
+        if in_flight:
+            cancel_stale_payment_task.defer(payment_id=in_flight.pk, request_id=get_request_id())
         logger.info("hold expired")
         return True
 

@@ -40,3 +40,14 @@ class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
         fields = ["id", "code", "ticket_type", "event", "status", "checked_in_at"]
+
+
+class PayRequestSerializer(serializers.Serializer):
+    payment_method = serializers.CharField(max_length=64)
+
+
+class PaymentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    status = serializers.CharField()
+    amount_cents = serializers.IntegerField()
+    currency = serializers.CharField()

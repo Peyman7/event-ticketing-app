@@ -9,12 +9,19 @@ from apps.core.errors_api import DomainError
 from apps.core.idempotency import HEADER, REPLAY_HEADER, idempotent
 from apps.core.metrics import CHECKOUT_FAILURES, CHECKOUT_LATENCY
 from apps.core.state_machine import InvalidTransition
+from apps.payments.services import PaymentRejected, start_payment
 
 from . import services
 from .inventory import SoldOut
 from .models import Order, Ticket
 from .pricing import LineRequest, PricingError
-from .serializers import OrderCreateSerializer, OrderSerializer, TicketSerializer
+from .serializers import (
+    OrderCreateSerializer,
+    OrderSerializer,
+    PaymentSerializer,
+    PayRequestSerializer,
+    TicketSerializer,
+)
 
 IDEMPOTENCY_PARAM = OpenApiParameter(HEADER, str, OpenApiParameter.HEADER, required=True)
 
@@ -82,7 +89,31 @@ class OrderViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Ge
             order = services.cancel_order(order.pk, actor=request.user)
         except InvalidTransition as exc:
             raise DomainError("invalid_state", str(exc)) from exc
+        except PaymentRejected as exc:
+            raise DomainError(exc.code, str(exc), status_code=exc.status_code) from exc
         return Response(OrderSerializer(order).data)
+
+    @extend_schema(
+        request=PayRequestSerializer,
+        responses={202: PaymentSerializer},
+        parameters=[IDEMPOTENCY_PARAM],
+        description="Start a payment. The outcome arrives asynchronously via webhook; "
+        "poll the order. Test tokens: pm_ok, pm_declined, pm_delayed.",
+    )
+    @action(detail=True, methods=["post"])
+    def pay(self, request, pk=None):
+        order = self.get_object()
+        return self._pay(request, order.pk)
+
+    @idempotent(scope="orders.pay")
+    def _pay(self, request, order_id):
+        s = PayRequestSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        try:
+            payment = start_payment(order_id, request.user, s.validated_data["payment_method"])
+        except PaymentRejected as exc:
+            raise DomainError(exc.code, str(exc), status_code=exc.status_code) from exc
+        return Response(PaymentSerializer(payment).data, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(responses={200: TicketSerializer(many=True)})
     @action(detail=True, methods=["get"])
